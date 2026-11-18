@@ -1,0 +1,16 @@
+[Unit]
+Description=AH Tracker - WoW: Forever auction price collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/ah-tracker
+ExecStart=%h/.local/share/pnpm/bin/node src/cli.ts run
+Restart=on-failure
+RestartSec=60
+# Keeps running quietly in the background; logs go to: journalctl --user -u ah-tracker
+Nice=10
+
+[Install]
+WantedBy=default.target

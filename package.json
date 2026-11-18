@@ -1,0 +1,21 @@
+{
+  "name": "ah-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WoW: Forever auction price tracker for EU PvP Alliance",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "poll": "node src/cli.ts poll-once",
+    "start": "node src/cli.ts run",
+    "status": "node src/cli.ts status",
+    "test": "node --test 'test/**/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}
