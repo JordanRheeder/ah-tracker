@@ -75,7 +75,8 @@ needs the Blizzard keys).
 ### Installing the addon without the dashboard
 
 - `pnpm install-addon` does the same as the Setup page's button.
-- `pnpm package-addon` builds `dist/AHTracker-<version>.zip`. Unzip it into
+- Download `AHTracker-<version>.zip` from [Releases](https://github.com/JordanRheeder/ah-tracker/releases), or build it with
+  `pnpm package-addon` (it lands in `dist/`). Unzip it into
   `_forever_/Interface/AddOns/`, so you end up with `Interface/AddOns/AHTracker/AHTracker.toc`.
 
 ### Forecasting model (optional)
