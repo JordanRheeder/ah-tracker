@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      lightweight-charts:
+        specifier: 5.3.0
+        version: 5.3.0
     devDependencies:
       '@types/node':
         specifier: ^24.19.2
@@ -140,6 +144,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  fancy-canvas@2.1.0:
+    resolution: {integrity: sha512-nifxXJ95JNLFR2NgRV4/MxVP45G9909wJTEKz5fg/TZS20JJZA6hfgRVh/bC9bwl2zBtBNcYPjiBE4njQHVBwQ==}
+
+  lightweight-charts@5.3.0:
+    resolution: {integrity: sha512-w16fu2/FteUkIJdgc9G2tOCKs1fwFSqnqF8+kMgHGv0uGIfcfpEJhziSaQbML1yrkbeg4nQXV3msjmhBzhLNhw==}
+
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -213,6 +223,12 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
+
+  fancy-canvas@2.1.0: {}
+
+  lightweight-charts@5.3.0:
+    dependencies:
+      fancy-canvas: 2.1.0
 
   typescript@7.0.2:
     optionalDependencies:

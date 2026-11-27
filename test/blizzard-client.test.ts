@@ -6,7 +6,9 @@ import { fetchHouse } from "../src/ingest/blizzard.ts";
 const config: Config = {
   blizzard: { clientId: "id", clientSecret: "secret", region: "eu", namespace: "dynamic-forever-eu", rulesetId: 1, houseId: 110, buyoutIsStackTotal: true },
   tsm: { game: "forever", region: "eu", realm: "pvp-alliance" },
-  pollMinutes: { blizzard: 15, tsm: 180 },
+  auctionator: { wowForeverDir: "/nonexistent" },
+  undermine: { apiKey: "", region: "euf", backfillMinSoldPerDay: 5, reservePoints: 100 },
+  pollMinutes: { blizzard: 15, tsm: 60, auctionator: 1, undermine: 20 },
   rawRetentionDays: 30,
   dataDir: "/nonexistent",
 };

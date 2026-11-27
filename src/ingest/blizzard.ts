@@ -107,7 +107,7 @@ export interface StoreResult {
   goneExpired?: number;
 }
 
-/** Stores a snapshot unless an identical one is already stored. */
+/** Stores a Blizzard API snapshot unless an identical one is already stored. */
 export function storeSnapshot(
   db: Db,
   opts: {
@@ -119,30 +119,64 @@ export function storeSnapshot(
     buyoutIsStackTotal: boolean;
   },
 ): StoreResult {
-  const hash = createHash("sha256").update(opts.body).digest("hex");
-  const exists = db.prepare("SELECT id FROM snapshot WHERE house_id = ? AND content_hash = ?").get(opts.houseId, hash);
   const house = JSON.parse(opts.body) as HouseResponse;
-  const listings = toListings(house, opts.buyoutIsStackTotal);
+  return storeListings(db, {
+    source: "blizzard",
+    houseId: opts.houseId,
+    fetchedAt: opts.fetchedAt,
+    lastModified: opts.lastModified ? Math.floor(Date.parse(opts.lastModified) / 1000) : null,
+    raw: { body: opts.body, ext: "json" },
+    dataDir: opts.dataDir,
+    listings: toListings(house, opts.buyoutIsStackTotal),
+    trackAuctionIds: true,
+  });
+}
+
+/**
+ * Stores one snapshot of listings from any source, unless identical content is already stored.
+ * `trackAuctionIds` is only meaningful when listings carry stable auction ids across snapshots.
+ */
+export function storeListings(
+  db: Db,
+  opts: {
+    source: string;
+    houseId: number;
+    fetchedAt: number;
+    lastModified: number | null;
+    raw: { body: string; ext: string };
+    dataDir: string | null;
+    listings: Listing[];
+    trackAuctionIds: boolean;
+    /**
+     * Summary snapshots hold one "listing" per item (cheapest unit price + total quantity), so
+     * measures that need individual listings (price_20, percentiles, listing count) are stored as NULL.
+     */
+    summary?: boolean;
+  },
+): StoreResult {
+  const { listings } = opts;
+  const hash = createHash("sha256").update(opts.raw.body).digest("hex");
+  // Identical content is a duplicate whichever house it was labelled with (old scans can be relabelled).
+  const exists = db.prepare("SELECT id FROM snapshot WHERE content_hash = ?").get(hash);
   if (exists) return { stored: false, auctions: listings.length, items: 0 };
 
   const stats = aggregate(listings);
-  const lastModified = opts.lastModified ? Math.floor(Date.parse(opts.lastModified) / 1000) : null;
 
   return transaction(db, () => {
     const snap = db
       .prepare(
-        `INSERT INTO snapshot (house_id, fetched_at, last_modified, content_hash, auction_count, item_count)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO snapshot (source, house_id, fetched_at, last_modified, content_hash, auction_count, item_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(opts.houseId, opts.fetchedAt, lastModified, hash, listings.length, stats.length);
+      .run(opts.source, opts.houseId, opts.fetchedAt, opts.lastModified, hash, listings.length, stats.length);
     const snapshotId = Number(snap.lastInsertRowid);
 
     if (opts.dataDir) {
       const day = new Date(opts.fetchedAt * 1000).toISOString().slice(0, 10);
       const dir = join(opts.dataDir, "raw", day);
       mkdirSync(dir, { recursive: true });
-      const rawPath = join(dir, `house-${opts.houseId}-snapshot-${snapshotId}.json.gz`);
-      writeFileSync(rawPath, gzipSync(opts.body));
+      const rawPath = join(dir, `${opts.source}-house-${opts.houseId}-snapshot-${snapshotId}.${opts.raw.ext}.gz`);
+      writeFileSync(rawPath, gzipSync(opts.raw.body));
       db.prepare("UPDATE snapshot SET raw_path = ? WHERE id = ?").run(rawPath, snapshotId);
     }
 
@@ -150,10 +184,12 @@ export function storeSnapshot(
       `INSERT INTO item_snapshot (snapshot_id, item_id, ts, min_buyout, price_20, p10, p25, p50, quantity, listings)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    for (const s of stats)
-      ins.run(snapshotId, s.itemId, opts.fetchedAt, s.minBuyout, s.price20, s.p10, s.p25, s.p50, s.quantity, s.listings);
+    for (const s of stats) {
+      if (opts.summary) ins.run(snapshotId, s.itemId, opts.fetchedAt, s.minBuyout, null, null, null, null, s.quantity, null);
+      else ins.run(snapshotId, s.itemId, opts.fetchedAt, s.minBuyout, s.price20, s.p10, s.p25, s.p50, s.quantity, s.listings);
+    }
 
-    const gone = trackAuctions(db, snapshotId, listings);
+    const gone = opts.trackAuctionIds ? trackAuctions(db, snapshotId, listings) : {};
     return { stored: true, snapshotId, auctions: listings.length, items: stats.length, ...gone };
   });
 }

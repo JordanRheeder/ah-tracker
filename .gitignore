@@ -1,4 +1,26 @@
-node_modules/
+# Secrets: only .env.example is committed
 .env
+.env.*
+!.env.example
+
+# Local data (auction database, raw snapshots, reports)
 data/
+reports/
+*.sqlite
+*.sqlite-*
 *.log
+
+# Dependencies and build output
+node_modules/
+.venv/
+__pycache__/
+dist/
+
+# Transaction data: never commit TSM ledger / accounting data or WoW SavedVariables.
+# (Only addon/AHTracker/*.lua is committed; it is the addon source, not saved data.)
+WTF/
+SavedVariables/
+TradeSkillMaster*.lua
+*Accounting*.csv
+*ledger*.csv
+*ledger*.json

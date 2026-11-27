@@ -1,0 +1,13 @@
+[Unit]
+Description=AH Tracker dashboard (http://127.0.0.1:8787, local only)
+After=ah-tracker.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/ah-tracker
+ExecStart=%h/.local/share/pnpm/bin/node src/api/server.ts
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

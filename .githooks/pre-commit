@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Refuses commits that would include a .env file, a filled-in API key, or local auction/ledger data.
+# Enabled with: git config core.hooksPath .githooks   (pnpm run setup does this)
+set -euo pipefail
+
+bad=0
+while IFS= read -r f; do
+  case "$(basename "$f")" in
+    .env.example) ;;
+    .env|.env.*) echo "pre-commit: refusing to commit $f (secrets belong in the git-ignored .env)"; bad=1 ;;
+  esac
+  # Transaction data: databases, WoW SavedVariables, TSM ledger/accounting exports.
+  case "$f" in
+    test/fixtures/*) ;;
+    *.sqlite|*.sqlite-*|*.db|data/*|*/WTF/*|WTF/*|*/SavedVariables/*|*TradeSkillMaster*.lua|*[Aa]ccounting*.csv|*[Ll]edger*.csv|*[Ll]edger*.json)
+      echo "pre-commit: refusing to commit $f (local auction/transaction data)"; bad=1 ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+# Added lines that look like a filled-in secret: a dotenv-style `*_KEY=value` setting, or a long quoted
+# literal assigned to apiKey / secret / token / password / clientId in code.
+SECRET_RE='^\+\s*(export\s+)?[A-Z0-9_]*(KEY|SECRET|TOKEN|PASSWORD|CLIENT_ID)\s*=\s*["'\'']?[^[:space:]"'\''#]{8,}|(api_?key|secret|token|password|client_?id)["'\'']?\s*[:=]\s*["'\''][A-Za-z0-9_+/=.\-]{20,}["'\'']'
+hits=$(git diff --cached -U0 --diff-filter=ACMR | grep -vE '^\+\+\+' | grep -iE "$SECRET_RE" || true)
+if [ -n "$hits" ]; then
+  echo "pre-commit: a staged line looks like it contains an API key or secret:"
+  echo "$hits" | sed -E 's/([=:]\s*["'\'']?).*/\1<hidden>/'
+  bad=1
+fi
+
+if [ "$bad" -ne 0 ]; then
+  echo "Move the value into .env, or commit with --no-verify if this is a false alarm."
+  exit 1
+fi

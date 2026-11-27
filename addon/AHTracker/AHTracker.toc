@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: AH Tracker
+## Notes: Saves each Auctionator full scan with its time so the AH Tracker app on your PC can chart prices.
+## Author: Jordan Rheeder
+## Version: 1.9.1
+## Dependencies: Auctionator
+## SavedVariables: AHTRACKER_DB
+
+Lists.lua
+AHTracker.lua

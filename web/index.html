@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AH Tracker</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><a href="#/overview" class="brand-link" title="Overview">AH Tracker</a> <span class="muted">· Forever EU</span>
+      <select id="house" aria-label="Auction house"></select>
+      <button id="sync" class="btn sync-btn" title="Pull the latest Undermine Exchange and TSM data, import new Auctionator scans, recompute statistics and rewrite the shopping lists">Sync now</button>
+      <span id="last-update" class="muted small"></span>
+    </div>
+    <div id="sync-msg" class="sync-msg" role="status" hidden></div>
+    <nav>
+      <a href="#/overview" data-nav="overview">Overview</a>
+      <a href="#/flips" data-nav="flips">Flips</a>
+      <a href="#/browse" data-nav="browse">Browse</a>
+      <a href="#/" data-nav="items">Items</a>
+      <a href="#/health" data-nav="health">Data health</a>
+      <a href="#/opportunities" data-nav="opportunities">Opportunities</a>
+      <a href="#/shuffles" data-nav="shuffles">Ench. shuffles</a>
+      <a href="#/forecasts" data-nav="forecasts">Forecasts</a>
+      <a href="#/watch" data-nav="watch">Watchlist</a>
+      <a href="#/materials" data-nav="materials">Materials</a>
+      <a href="#/crafting" data-nav="crafting">Crafting</a>
+      <a href="#/anomalies" data-nav="anomalies">Anomalies</a>
+      <a href="#/inventory" data-nav="inventory">Inventory</a>
+      <a href="#/calc" data-nav="calc">Calculator</a>
+      <a href="#/notifications" data-nav="notifications">Notifications <span id="notif-badge" class="notif-badge" hidden></span></a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-items" class="layout">
+      <aside class="sidebar">
+        <input id="search" type="search" placeholder="Search items (name or id)" autocomplete="off">
+        <div class="hint muted" id="search-hint">Busiest sellers in the latest scan</div>
+        <ul id="results" class="results"></ul>
+      </aside>
+
+      <div class="content">
+        <div id="empty" class="empty">
+          <h2>Pick an item</h2>
+          <p class="muted">Search on the left. Prices come from your Auctionator scans; sales figures are TSM's EU-wide data.</p>
+          <div id="movers"></div>
+        </div>
+
+        <div id="item" hidden>
+          <div class="item-head">
+            <div class="item-title">
+              <img id="item-icon" class="icon icon-lg" alt="" hidden>
+              <div>
+              <h1 id="item-name"></h1>
+              <div class="muted" id="item-sub"></div>
+              <label class="item-target muted small">Alert me when the cheapest listing reaches
+                <input id="item-target" type="number" min="0" step="0.01" inputmode="decimal" class="small-input"> g
+                <span id="item-target-msg"></span></label>
+              </div>
+            </div>
+            <div class="ranges" role="group" aria-label="Chart range">
+              <button data-range="1D">1D</button>
+              <button data-range="7D" class="active">7D</button>
+              <button data-range="30D">30D</button>
+              <button data-range="90D">90D</button>
+            </div>
+          </div>
+
+          <div class="stats" id="stats"></div>
+
+          <div class="card" id="trade-card" hidden>
+            <div class="card-title">Trading summary <span class="muted" id="trade-note"></span></div>
+            <div class="trade" id="trade"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Price per unit <span class="muted" id="chart-note"></span></div>
+            <div id="chart" class="chart"></div>
+            <div id="chart-legend" class="chart-legend"></div>
+            <div id="chart-empty" class="chart-empty muted" hidden></div>
+            <!-- Phase 4: forecast band overlays this chart. -->
+          </div>
+
+          <div class="card">
+            <div class="card-title">When is it cheap? <span class="muted">Median price by day and hour, your local time, last 28 days</span></div>
+            <div id="heatmap" class="heatmap"></div>
+            <div class="legend muted"><span class="sw cheap"></span> cheaper than usual <span class="sw dear"></span> dearer than usual <span class="sw none"></span> no scans yet</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-overview" hidden>
+     <div class="ov-layout">
+      <div class="content wide">
+        <div class="opp-head-row">
+          <h1>Overview</h1>
+          <div class="tabs" id="ov-period" role="tablist" aria-label="Period">
+            <button data-days="1">24 hours</button>
+            <button data-days="7">7 days</button>
+            <button data-days="30">30 days</button>
+            <button data-days="0">All time</button>
+          </div>
+        </div>
+        <p class="muted small" id="ov-note"></p>
+        <div class="stats" id="ov-stats"></div>
+        <div class="ov-grid">
+          <div class="card">
+            <div class="card-title">Trading profit <span class="muted">items you bought and sold again</span></div>
+            <table class="ov-lines" id="ov-trading"></table>
+          </div>
+          <div class="card">
+            <div class="card-title">Money in</div>
+            <table class="ov-lines" id="ov-income"></table>
+          </div>
+          <div class="card">
+            <div class="card-title">Money out</div>
+            <table class="ov-lines" id="ov-costs"></table>
+          </div>
+        </div>
+        <div class="ov-grid two">
+          <div class="card">
+            <div class="card-title">Gold on hand <span class="muted" id="ov-gold-note"></span></div>
+            <div id="ov-gold-chart" class="ov-chart"></div>
+            <table class="ov-lines" id="ov-chars"></table>
+          </div>
+          <div class="card">
+            <div class="card-title">By day <span class="muted">your local time</span></div>
+            <table class="opp-table">
+              <thead><tr><th>Day</th><th class="num">In</th><th class="num">Out</th><th class="num">Net</th></tr></thead>
+              <tbody id="ov-daily"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Latest activity</div>
+          <table class="opp-table">
+            <thead><tr><th>When</th><th>What</th><th>Item</th><th class="num">Qty</th><th class="num" title="Price per unit (for an expired listing: the deposit lost per unit)">Per unit</th><th class="num">Amount</th><th class="num" title="On units you bought: sale after the AH cut minus what they cost">Profit</th><th>Character</th></tr></thead>
+            <tbody id="ov-activity"></tbody>
+          </table>
+        </div>
+      </div>
+      <aside class="ov-side" aria-label="Flips so far">
+        <div class="card">
+          <div class="card-title">Flips so far <a href="#/flips" class="muted small">all →</a></div>
+          <div id="ov-flips-total" class="ov-flips-total"></div>
+          <table class="ov-flips">
+            <thead><tr><th>Item</th><th class="num" title="Units bought on the AH">Bought</th><th class="num" title="Of those, units sold">Sold</th><th class="num">Profit</th><th class="num" title="Profit as a share of what the sold units cost">Margin</th></tr></thead>
+            <tbody id="ov-flips"></tbody>
+          </table>
+        </div>
+      </aside>
+     </div>
+    </section>
+
+    <section id="view-flips" hidden>
+      <div class="content wide">
+        <div class="opp-head-row">
+          <h1>Flips</h1>
+          <div class="tabs" id="fl-period" role="tablist" aria-label="Period">
+            <button data-days="1">24 hours</button>
+            <button data-days="7">7 days</button>
+            <button data-days="30">30 days</button>
+            <button data-days="0">All time</button>
+          </div>
+        </div>
+        <p class="muted small" id="fl-note"></p>
+        <div class="stats" id="fl-stats"></div>
+        <div class="tabs" id="fl-status" role="tablist" aria-label="Status">
+          <button data-status="">All</button>
+          <button data-status="sold">Sold out</button>
+          <button data-status="part-sold">Partly sold</button>
+          <button data-status="holding">Still holding</button>
+        </div>
+        <div class="table-scroll">
+          <table class="opp-table" id="fl-table">
+            <thead id="fl-head"><tr>
+              <th data-key="name">Item</th>
+              <th data-key="status">Status</th>
+              <th data-key="boughtQty" class="num">Bought</th>
+              <th data-key="avgBuy" class="num">Avg buy</th>
+              <th data-key="soldQty" class="num">Sold</th>
+              <th data-key="avgSell" class="num">Avg sell</th>
+              <th data-key="revenue" class="num" title="What the sold units made after the AH cut">Made</th>
+              <th data-key="costOfSold" class="num" title="What the sold units cost you">Cost</th>
+              <th data-key="depositsLost" class="num" title="Deposits lost on listings that expired">Deposits lost</th>
+              <th data-key="profit" class="num">Profit</th>
+              <th data-key="margin" class="num">Margin</th>
+              <th data-key="heldQty" class="num" title="Bought units you still own: bags, bank, mail or listed (never more than TSM counted you owning at its last save)">Still held</th>
+              <th data-key="goneQty" class="num" title="Bought units you no longer own with no sale recorded: used, crafted, turned in, given away, or sold with the gold still in your mailbox (TSM records a sale when you collect it)">Used / gone</th>
+              <th data-key="lastActivity">Last activity</th>
+            </tr></thead>
+            <tbody id="fl-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-browse" hidden>
+      <div class="ah">
+        <aside class="ah-cats" aria-label="Categories">
+          <div class="ah-cats-title">Categories</div>
+          <ul id="cat-tree"></ul>
+        </aside>
+        <div class="ah-main">
+          <div class="browse-head">
+            <h1 id="browse-title">All items</h1>
+            <input id="browse-filter" type="search" placeholder="Filter by name or item id" autocomplete="off">
+            <span class="muted" id="browse-meta"></span>
+          </div>
+          <table class="browse-table">
+            <thead><tr>
+              <th data-sort="name">Item</th>
+              <th data-sort="price" class="num">Price</th>
+              <th data-sort="quantity" class="num">Available</th>
+              <th data-sort="change" class="num">24 h</th>
+              <th data-sort="usual" class="num" title="AH Tracker's usual price on this house: median of the last 7 days">Usual (7-day)</th>
+              <th data-sort="sold" class="num">Sold/day (EU)</th>
+              <th data-sort="rate" class="num">Sale rate</th>
+              <th data-sort="pattern" class="num" title="On how many days the item was cheapest and dearest at its usual hours">Pattern held</th>
+            </tr></thead>
+            <tbody id="browse-rows"></tbody>
+          </table>
+          <div class="pager">
+            <button id="prev-page">Previous</button>
+            <span id="page-info" class="muted"></span>
+            <button id="next-page">Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-opportunities" hidden>
+      <div class="content wide">
+        <div class="opp-head-row">
+          <h1>What to trade</h1>
+          <label class="margin-setting">Minimum margin
+            <input id="min-margin" type="number" min="5" max="200" step="1" inputmode="numeric"> %
+          </label>
+          <label class="margin-setting" title="Only trades that still make your margin if it sells at the low end of normal, sell 20+/day with a 50%+ sale rate, have 5+ days of history, and are not falling">
+            <input id="safe-only" type="checkbox"> Safer trades only
+          </label>
+          <label class="margin-setting" title="How many units you would buy and carry: the Total column is the profit for that many, or for all that are listed if fewer">Units
+            <input id="opp-units" type="number" min="1" step="1" inputmode="numeric" class="small-input">
+          </label>
+          <label class="margin-setting" title="Hide trades that make less than this per unit (0 hides losses). Between houses: Profit (N), what selling straight away makes. Right now: profit at today's price for buys, gain over the usual price for sells. Other tabs: Profit / unit">Profit / unit at least
+            <input id="min-profit" type="number" step="0.05" inputmode="decimal" class="small-input"> g
+          </label>
+          <span id="margin-msg" class="muted small" role="status"></span>
+        </div>
+        <p class="muted" id="opp-intro">Ranked by profit per unit, how much the item sells, and how strong the evidence is. Profit is after the AH cut (5% Alliance, 15% Neutral). Hours are your local time.</p>
+        <div class="tabs" id="opp-tabs" role="tablist">
+          <button data-kind="now">Right now</button>
+          <button data-kind="all" class="active">Best overall</button>
+          <button data-kind="buy-now">Buy now</button>
+          <button data-kind="time-flip">Time-of-day flips</button>
+          <button data-kind="sell-now">Sell now</button>
+          <button data-kind="cross-house">Between houses</button>
+        </div>
+        <div class="tabs direction" id="opp-goods" role="group" aria-label="Which items">
+          <button data-goods="">All items</button>
+          <button data-goods="tg" title="Trade goods only: cloth, herbs, ore and bars, leather, essences, gems...">Trade goods</button>
+          <button data-goods="quest" title="Quest items: turn-ins like Blasted Lands organs and Green Hills of Stranglethorn pages, often dearer on the other house">Quest items</button>
+          <button data-goods="other" title="Everything else: gear, consumables, recipes...">Other items</button>
+        </div>
+        <div class="routes" id="opp-direction" hidden role="group" aria-label="Trade routes">
+          <span class="muted small">Show trades:</span>
+          <span id="opp-routes"></span>
+          <label class="route" id="opp-all-wrap" title="Show every item that sells on both houses, including ones that would lose money if sold now"><input type="checkbox" id="opp-all"> Include unprofitable</label>
+        </div>
+        <div class="export-bar">
+          <p class="muted small" id="opp-kind-help"></p>
+          <label class="muted small">Top <select id="export-count"><option>25</option><option selected>50</option><option>100</option><option value="0">all</option></select></label>
+          <button id="export-auctionator" class="btn" title="Paste into Auctionator: Shopping tab, Import">Copy as Auctionator list</button>
+          <button id="export-tsm" class="btn">Copy as TSM group</button>
+          <span id="export-msg" class="muted small" role="status"></span>
+        </div>
+        <p class="muted small" id="opp-count"></p>
+        <div id="now-view" hidden>
+          <h2 id="now-title"></h2>
+          <h3>Buy at this hour</h3>
+          <table class="opp-table">
+            <thead id="now-buy-head"><tr><th data-key="name">Item</th><th data-key="reason">Why now</th><th data-key="current" class="num">Price now</th><th data-key="maxBuy" class="num">Pay at most</th><th data-key="sellTarget" class="num">Sell later for</th><th data-key="profitAtCurrent" class="num">Profit / unit at today's price</th><th data-key="patternHeld" class="num" title="On how many days the item was cheapest and dearest at its usual hours">Pattern held</th><th>Sell when (local)</th></tr></thead>
+            <tbody id="now-buy"></tbody>
+          </table>
+          <h3>Sell at this hour</h3>
+          <table class="opp-table">
+            <thead id="now-sell-head"><tr><th data-key="name">Item</th><th data-key="reason">Why now</th><th data-key="listAt" class="num">Cheapest listing now</th><th data-key="usual" class="num">Usual price</th><th data-key="vsUsual" class="num">Above usual</th><th data-key="profitVsUsual" class="num">Gain / unit vs usual</th><th data-key="patternHeld" class="num" title="On how many days the item was cheapest and dearest at its usual hours">Pattern held</th><th>Buy back when (local)</th></tr></thead>
+            <tbody id="now-sell"></tbody>
+          </table>
+        </div>
+        <div class="table-scroll">
+        <table class="opp-table" id="opp-table">
+          <thead id="opp-head"><tr><th data-key="name">Item</th><th data-key="kind">Do this</th><th data-key="buyPrice" class="num" title="Newest price on the house you buy on: your latest Auctionator scan if it is newer than Undermine Exchange's hourly data">Buy</th><th data-key="listedQty" class="num" title="How many are listed on the house you buy on (all prices; your latest scan or Undermine's hourly snapshot)">Listed</th><th data-key="sellNow" class="num" title="Sell now: the cheapest listing on the house you sell on in your latest Auctionator scan (last 6 hours). Between houses only">Sell (N)</th><th data-key="sellPrice" class="num" title="Usual price: median of the last 7 days of Undermine Exchange's hourly data">Sell</th><th data-key="profit" class="num" title="Per unit at the usual Sell price, after the AH cut and expected lost deposits">Profit / unit</th><th data-key="profitNow" class="num" title="Profit now: per unit if sold straight away at Sell (N), after the AH cut and expected lost deposits. Between houses only">Profit (N)</th><th data-key="total" class="num" id="opp-total-head" title="Profit for the number of units in the Units box (or all that are listed, if fewer): Profit (N) between houses, Profit / unit otherwise">Total</th><th data-key="margin" class="num" title="Profit at the usual Sell price as a share of the buy price">Margin</th><th data-key="marginNow" class="num" title="Margin now: profit if sold at Sell (N), as a share of the buy price. Between houses only">Margin (N)</th><th data-key="safeProfit" class="num" title="Profit per unit if you sell at the low end of normal, or at Sell (N) if that is lower, and more listings expire">Worst case</th><th data-key="soldPerDay" class="num">Sold/day (EU)</th><th data-key="patternHeld" class="num" title="On how many days the item was cheapest and dearest at its usual hours">Pattern held</th><th data-key="confidence">Confidence</th></tr></thead>
+          <tbody id="opp-rows"></tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-shuffles" hidden>
+      <div class="content wide">
+        <h1>Enchanting shuffles</h1>
+        <p class="muted">Enchanting materials (dusts, essences, shards, crystals, rods and reagents like Righteous Orb and the elemental essences) and essence conversions (3 Lesser = 1 Greater: buy one, right-click to combine or split, sell the other), and what each route makes: buy at the cheapest listing now, sell after that house's AH cut (5% Alliance, 15% Neutral) and expected lost deposits. Between houses you sell at the other house's cheapest listing now; on the same house, at its usual price (7-day median). Routes that sell where nobody buys (e.g. Horde-only items on Alliance) are left out. Prices are your latest scans, or Undermine's hourly snapshot if newer.</p>
+        <div class="tabs" id="sh-route" role="tablist" aria-label="Route">
+          <button data-route="neutral>alliance">Neutral → Alliance</button>
+          <button data-route="alliance>neutral">Alliance → Neutral</button>
+          <button data-route="alliance>alliance">Alliance → Alliance</button>
+          <button data-route="neutral>neutral">Neutral → Neutral</button>
+          <button data-route="best">Best route</button>
+        </div>
+        <div class="export-bar">
+          <span class="tabs direction" id="sh-show" role="group" aria-label="Show">
+            <button data-show="">Both</button><button data-show="mats">Materials</button><button data-show="conv">Conversions</button>
+          </span>
+          <label class="muted small"><input type="checkbox" id="sh-profitable"> Only profitable</label>
+          <label class="muted small">Sold/day (EU) at least <input id="sh-min-sold" type="number" min="0" step="1" class="small-input"></label>
+          <input id="sh-search" type="search" placeholder="Filter by name" autocomplete="off" class="small-input" style="width:180px">
+          <span id="sh-count" class="muted small"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="opp-table">
+            <thead id="sh-head"><tr>
+              <th data-key="name">Item</th>
+              <th data-key="buy" class="num" id="sh-buy-head">Buy</th>
+              <th data-key="sell" class="num" id="sh-sell-head">Sell</th>
+              <th data-key="profit" class="num">Profit / unit</th>
+              <th data-key="margin" class="num">Margin</th>
+              <th data-key="soldPerDay" class="num">Sold/day (EU)</th>
+              <th title="Profit per unit on every route: N→A, A→N, A→A, N→N">All routes</th>
+            </tr></thead>
+            <tbody id="sh-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-notifications" hidden>
+      <div class="content wide">
+        <div class="opp-head-row">
+          <h1>Notifications</h1>
+          <button class="btn" id="notif-read-all">Mark all read</button>
+          <button class="btn" id="notif-clear">Clear read</button>
+          <label class="margin-setting" title="Also show each notification on your desktop (KDE/GNOME)"><input type="checkbox" id="notif-desktop"> Desktop notifications too</label>
+        </div>
+        <p class="muted">Price targets you set and items you bought that can be sold now for your minimum margin. New ones pop up in the corner while the dashboard is open.</p>
+        <div id="notif-list" class="notif-list"></div>
+      </div>
+    </section>
+
+    <section id="view-watch" hidden>
+      <div class="content wide">
+        <div class="opp-head-row">
+          <h1>Watchlist</h1>
+          <button class="btn" id="watch-check">Check now</button>
+          <span id="watch-msg" class="muted small" role="status"></span>
+        </div>
+        <p class="muted" id="watch-intro"></p>
+        <form id="watch-form" class="target-form" autocomplete="off">
+          <label>Item <input id="watch-item" list="watch-items" placeholder="e.g. Black Lotus" required></label>
+          <datalist id="watch-items"></datalist>
+          <label title="Optional. Puts the item on the [WATCH] Auctionator list with this limit and notifies you when the cheapest listing drops to it">Buy at most <input id="watch-gold" type="number" min="0.0001" step="0.0001" inputmode="decimal" placeholder="optional"> g</label>
+          <button class="btn" type="submit">Watch</button>
+        </form>
+        <div class="opp-filters" id="watch-filters">
+          <div class="tabs" id="watch-group" role="tablist" aria-label="Which items">
+            <button class="tab" data-group="">All</button>
+            <button class="tab" data-group="trade">Trade goods</button>
+            <button class="tab" data-group="consumable">Consumables</button>
+            <button class="tab" data-group="other">Other</button>
+          </div>
+          <label class="muted small">Category <select id="watch-cat"><option value="">All categories</option></select></label>
+          <label class="muted small">Trend <select id="watch-trend"><option value="">Any</option><option>rising</option><option>flat</option><option>falling</option></select></label>
+          <label class="muted small">Forecast <select id="watch-model"><option value="">Any</option><option>up</option><option>unclear</option><option>down</option><option value="none">no forecast</option></select></label>
+          <label class="muted small">Supply <select id="watch-supply"><option value="">Any</option><option>shrinking</option><option>steady</option><option>growing</option></select></label>
+          <label class="muted small"><input type="checkbox" id="watch-buyonly"> With a buy price</label>
+          <input id="watch-q" type="search" placeholder="Search" class="small-input" aria-label="Search the watchlist">
+          <button class="btn small" id="watch-reset">Reset</button>
+          <span id="watch-count" class="muted small"></span>
+        </div>
+        <table class="opp-table">
+          <thead><tr><th>Item</th><th class="num">Now</th><th class="num">Buy at most</th><th title="Daily price trend over the last 4 days (7 days below)">Trend</th><th title="Quantity listed, 7-day trend">Supply</th><th title="The model's forecast (3-day, or 1-day when 3-day is not usable)">Forecast</th><th title="Average 7-day trend on EU Horde, US Alliance and US Horde">Other realms</th><th>Checked</th><th></th></tr></thead>
+          <tbody id="watch-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-forecasts" hidden>
+      <div class="content wide">
+        <h1>Forecasts</h1>
+        <p class="muted">Which way prices are moving and where they are likely to be over the next few days, from Undermine's hourly prices on the house selected above. Forever is only a couple of weeks old, so every method is tested against simply assuming "no change" on the history so far, and re-tested on every refresh.</p>
+        <div class="stats" id="fc-methods"></div>
+        <div class="card" id="fc-model" hidden></div>
+        <div class="card" id="fc-live" hidden></div>
+        <div class="tabs" id="fc-view" role="tablist" aria-label="View">
+          <button data-view="rising">Rising</button>
+          <button data-view="falling">Falling</button>
+          <button data-view="snap" title="Prices that moved away from their recent level and are expected to move 5% or more back toward it">Expected to snap back</button>
+          <button data-view="all">All</button>
+        </div>
+        <div class="export-bar">
+          <label class="muted small">Category <select id="fc-class"><option value="">All categories</option></select></label>
+          <label class="muted small">Price at least <input id="fc-min-price" type="number" min="0" step="0.5" inputmode="decimal" class="small-input"> g</label>
+          <label class="muted small">Sold/day (EU) at least <input id="fc-min-sold" type="number" min="0" step="1" inputmode="numeric" class="small-input"></label>
+          <button id="fc-all-trade" class="btn" title="Every trade good on this house, any price, busiest first">Show all trade goods</button>
+          <span id="fc-count" class="muted small"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="opp-table">
+            <thead id="fc-head"><tr>
+              <th data-key="name">Item</th>
+              <th data-key="level" class="num" title="Latest daily price (median of today's hourly prices)">Now</th>
+              <th data-key="nextPct" class="num" title="Expected over the next 1-3 days: today's price pulled halfway back toward its 3-day median">Next 1–3 days</th>
+              <th data-key="m1pct" class="num" title="Pooled model (4 PvP markets), EU Alliance only: most likely price in 1 day, its 80% range, and the chance it goes up">Model: 1 day</th>
+              <th data-key="m3pct" class="num" title="Pooled model (4 PvP markets), EU Alliance only: most likely price in 3 days, its 80% range, and the chance it goes up">Model: 3 days</th>
+              <th data-key="trend" class="num" title="Trend over the last 6 days, per day (Theil-Sen: one odd day does not swing it)">Trend / day</th>
+              <th data-key="consistency" class="num" title="How consistently the last 6 days moved that way: 1 = every day, 0 = no pattern">Consistency</th>
+              <th data-key="supplyTrend" class="num" title="Trend in the quantity listed, per day. Supply rising while price rises often stalls the rise">Listed / day</th>
+              <th data-key="peak" class="num" title="Highest and lowest daily price since we have data (launch week included)">High / low</th>
+              <th data-key="soldPerDay" class="num">Sold/day (EU)</th>
+              <th data-key="skill" class="num" title="How much closer the next-days estimate came than &quot;no change&quot; on this item's own history">Tested</th>
+            </tr></thead>
+            <tbody id="fc-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-crafting" hidden>
+      <div class="content wide">
+        <div class="opp-head-row">
+          <h1>Crafting</h1>
+          <span id="craft-count" class="muted small"></span>
+        </div>
+        <p class="muted" id="craft-intro"></p>
+        <div class="opp-filters">
+          <div class="tabs" id="craft-prof" role="tablist" aria-label="Profession">
+            <button class="tab" data-prof="">All</button>
+            <button class="tab" data-prof="alchemy">Alchemy</button>
+            <button class="tab" data-prof="cooking">Cooking</button>
+          </div>
+          <label class="muted small"><input type="checkbox" id="craft-pays"> Profitable only</label>
+          <label class="muted small"><input type="checkbox" id="craft-transmute"> Transmutes only</label>
+          <label class="muted small" title="Only results that sell for at least this much each">Sells for at least <input id="craft-min-price" type="number" min="0" step="0.05" inputmode="decimal" class="small-input"> g</label>
+          <label class="muted small">Sold/day (EU) at least <input id="craft-min-sold" type="number" min="0" step="1" inputmode="numeric" class="small-input"></label>
+          <label class="muted small"><input type="checkbox" id="craft-priced"> Hide unpriced</label>
+          <input id="craft-q" type="search" placeholder="Search recipes or reagents" class="small-input" aria-label="Search recipes">
+          <button class="btn small" id="craft-reset">Reset</button>
+        </div>
+        <div class="table-scroll">
+          <table class="opp-table">
+            <thead id="craft-head"><tr>
+              <th data-key="name">Recipe</th>
+              <th data-key="skill" class="num">Skill</th>
+              <th>Reagents</th>
+              <th data-key="cost" class="num" title="Buying the reagents now; vendor reagents (v) at the vendor">Cost</th>
+              <th data-key="sellEach" class="num" title="The lower of the cheapest listing now and the usual price">Sells for</th>
+              <th data-key="profit" class="num" title="Per craft, after the 5% AH cut and expected lost deposits">Profit</th>
+              <th data-key="margin" class="num">Margin</th>
+              <th data-key="soldPerDay" class="num" title="Sold per day across EU (TSM), and the share of listings that sell">Sold/day</th>
+              <th>Recipe from</th>
+            </tr></thead>
+            <tbody id="craft-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-materials" hidden>
+      <div class="content wide">
+        <div class="opp-head-row">
+          <h1>Materials</h1>
+          <label class="margin-setting" title="A listing counts as a snipe when its price is this share of the usual price or less. Also sets the in-game [SNIPE] lists">Snipe at
+            <input id="mat-fraction" type="number" min="5" max="95" step="5" inputmode="numeric" class="small-input"> % of usual or less
+          </label>
+          <span id="mat-msg" class="muted small" role="status"></span>
+        </div>
+        <p class="muted">Crafting materials on the house selected above: the cheapest listing right now (your latest Auctionator scan, or Undermine's hourly snapshot if that is newer) against the lower of the two houses' usual prices (median of the last 7 days), so on Neutral a snipe is at a fraction of Alliance's value. Highlighted rows are at snipe price: buy them. Enchanting, tailoring and blacksmithing materials also have in-game Auctionator lists, <b>[SNIPE] AHT &lt;house&gt; · &lt;profession&gt;</b>, and TSM Sniper groups.</p>
+        <div class="tabs" id="mat-tabs" role="tablist" aria-label="Profession"></div>
+        <div class="card" id="ess-card" hidden>
+          <div class="card-title">Essence conversions <span class="muted">3 Lesser = 1 Greater (right-click to combine or split, anyone can). Profit per Greater at the cheapest listings now, after the selling house's AH cut.</span></div>
+          <div class="table-scroll">
+            <table class="opp-table">
+              <thead><tr><th>Essence</th><th class="num">Lesser (Alliance / Neutral)</th><th class="num">Greater (Alliance / Neutral)</th>
+                <th class="num" title="Buy on Neutral, combine or split, sell on Alliance (after Alliance's 5% cut): the better of the two">Neutral → Alliance</th>
+                <th class="num" title="Buy on Alliance, combine or split, sell on Neutral (after Neutral's 15% cut): the better of the two">Alliance → Neutral</th><th>Best way right now</th><th class="num">Profit / Greater</th><th class="num">Margin</th></tr></thead>
+              <tbody id="ess-rows"></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="muted small" id="mat-count"></p>
+        <div class="table-scroll">
+          <table class="opp-table">
+            <thead id="mat-head"><tr>
+              <th data-key="name">Item</th>
+              <th data-key="cheapest" class="num" title="Cheapest listing in the newest data">Cheapest now</th>
+              <th data-key="usual" class="num" title="Median of the last 7 days of hourly prices on this house">Usual here</th>
+              <th data-key="usualOther" class="num" id="mat-other-head" title="Usual price on the other house">Usual on other</th>
+              <th data-key="vsUsual" class="num" title="Cheapest now as a share of the lower of the two usual prices">vs cheaper usual</th>
+              <th data-key="snipeAt" class="num" title="Buy at or under this">Snipe at ≤</th>
+              <th data-key="listed" class="num" title="How many are listed (all prices)">Listed</th>
+              <th data-key="soldPerDay" class="num">Sold/day (EU)</th>
+              <th data-key="trend" class="num" title="Trend over the last 6 days, per day">Trend / day</th>
+            </tr></thead>
+            <tbody id="mat-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-anomalies" hidden>
+      <div class="content wide">
+        <h1>Anomalies</h1>
+        <p class="muted">Unusual moves on items that actually sell: prices far outside their normal range, most of the stock bought up, or a market that has moved to a new level. Open until they return to normal.</p>
+        <table class="opp-table">
+          <thead id="anom-head"><tr><th data-key="name">Item</th><th data-key="kind">What happened</th><th data-key="current" class="num">Now</th><th data-key="median" class="num">Usual</th><th data-key="firstSeen">Since</th><th data-key="soldPerDay" class="num">Sold/day (EU)</th></tr></thead>
+          <tbody id="anom-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-inventory" hidden>
+      <div class="content wide">
+        <h1>Your inventory</h1>
+        <p class="muted">Sellable items in your bags and bank (soulbound items are skipped), priced on both auction houses. "You get" is per unit after that house's AH cut and expected deposit losses on 2-hour listings. Bags update on <code>/reload</code>; open your bank in game to include it.</p>
+        <div class="card" id="inv-targets-card">
+          <div class="card-title">Price targets <span class="muted">you get a desktop notification when the cheapest listing on either house reaches your target (instead of the usual margin alert)</span></div>
+          <form id="target-form" class="target-form" autocomplete="off">
+            <label>Item <input id="target-item" list="target-items" placeholder="Start typing, e.g. Black Lotus" required></label>
+            <datalist id="target-items"></datalist>
+            <label>Alert at <input id="target-gold" type="number" min="0.0001" step="0.0001" inputmode="decimal" placeholder="20" required> g</label>
+            <button class="btn" type="submit">Set alert</button>
+            <span id="target-msg" class="muted small" role="status"></span>
+          </form>
+          <table class="opp-table">
+            <thead><tr><th>Item</th><th class="num">Target</th><th class="num">Cheapest now</th><th>Status</th><th class="num">You hold</th><th class="num" title="If sold at the cheapest price now, after that house's AH cut">Profit now</th><th></th></tr></thead>
+            <tbody id="inv-targets"></tbody>
+          </table>
+        </div>
+        <div class="tabs" id="inv-mode" role="tablist" aria-label="Which items">
+          <button data-mode="all">All items</button>
+          <button data-mode="bought" title="Only units you bought on the auction house and have not sold yet (from TSM's ledger and AH Tracker's purchase records)">Items to resell</button>
+        </div>
+        <div class="card ready-card" id="inv-ready" hidden>
+          <div class="card-title">Ready to sell now <span class="muted" id="inv-ready-note"></span></div>
+          <table class="opp-table">
+            <thead><tr><th>Item</th><th class="num">Units</th><th>Where</th><th class="num">List at</th><th class="num">Paid</th><th class="num">Profit</th><th class="num">Margin</th><th>Ready since</th></tr></thead>
+            <tbody id="inv-ready-rows"></tbody>
+          </table>
+        </div>
+        <label class="margin-setting inv-hide"><input id="inv-hide-ignored" type="checkbox"> Hide ticked items <span class="muted small" id="inv-ignored-count"></span></label>
+        <div class="stats" id="inv-summary"></div>
+        <table class="opp-table">
+          <thead id="inv-head"><tr>
+            <th class="tick" title="Tick items you are keeping or not selling: they are greyed out and left out of the totals">Ignore</th>
+            <th data-key="name">Item</th>
+            <th data-key="qty" class="num">Qty</th>
+            <th data-key="soldPerDay" class="num" title="Average units sold per day across EU Forever (TSM region data). Below it: the sale rate, the share of listings that sell">Sold/day (EU)</th>
+            <th data-key="aNow" class="num">Alliance now</th>
+            <th data-key="aGet" class="num">Alliance: you get</th>
+            <th data-key="nNow" class="num">Neutral now</th>
+            <th data-key="nGet" class="num">Neutral: you get</th>
+            <th data-key="bestLabel">Best place</th>
+            <th data-key="edgePerUnit" class="num" title="How much more per unit the best house pays than the other">Extra / unit</th>
+            <th data-key="value" class="num">Value</th>
+            <th data-key="paidPerUnit" class="num" title="Average paid for the bought units you still hold">Paid / unit</th>
+            <th data-key="profitNow" class="num" title="On the bought units you still hold, if you list them now at the latest going price (the low end of current listings, up to 20 minutes old) on whichever house pays more, after the AH cut and expected deposit losses. Postage and undercutting are not included">P/L if sold now</th>
+            <th data-key="profit" class="num" title="On the bought units you still hold, if you wait and sell at the target price on the best house. Purchases come from TSM's ledger and AH Tracker; sales use up the oldest purchases first">Profit at target</th>
+          </tr></thead>
+          <tbody id="inv-rows"></tbody>
+        </table>
+        <p class="muted small" id="inv-chars"></p>
+      </div>
+    </section>
+
+    <section id="view-calc" hidden>
+      <div class="content wide">
+        <h1>Profit calculator</h1>
+        <p class="muted">What a trade really makes after the AH cut and listing deposits. Deposits are paid when you list, refunded when the item sells, and lost each time a 2-hour listing expires.</p>
+        <div class="calc">
+          <div class="card calc-inputs">
+            <div class="field">
+              <label for="calc-item">Item (optional, fills in the rest)</label>
+              <input id="calc-item" type="search" list="calc-items" placeholder="Search an item" autocomplete="off">
+              <datalist id="calc-items"></datalist>
+              <div class="muted small" id="calc-item-info"></div>
+            </div>
+          <div class="field">
+            <label>Buy price per unit</label>
+            <div class="money-in" id="calc-buy">
+              <input type="number" min="0" step="1" data-part="g" aria-label="Buy price per unit gold"><span class="g">g</span>
+              <input type="number" min="0" max="99" step="1" data-part="s" aria-label="Buy price per unit silver"><span class="s">s</span>
+              <input type="number" min="0" max="99" step="1" data-part="c" aria-label="Buy price per unit copper"><span class="c">c</span>
+            </div>
+            <div class="muted small" id="calc-buy-hint"></div>
+          </div>
+          <div class="field">
+            <label>Sell price per unit</label>
+            <div class="money-in" id="calc-sell">
+              <input type="number" min="0" step="1" data-part="g" aria-label="Sell price per unit gold"><span class="g">g</span>
+              <input type="number" min="0" max="99" step="1" data-part="s" aria-label="Sell price per unit silver"><span class="s">s</span>
+              <input type="number" min="0" max="99" step="1" data-part="c" aria-label="Sell price per unit copper"><span class="c">c</span>
+            </div>
+            <div class="muted small" id="calc-sell-hint"></div>
+          </div>
+            <div class="quick" id="calc-quick" hidden>
+              <button class="btn" data-fill="target">Use target sell price</button>
+              <button class="btn" data-fill="current">Use current price</button>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="calc-qty">Quantity</label><input id="calc-qty" type="number" min="1" step="1" value="20"></div>
+              <div class="field"><label for="calc-cut">AH cut %</label><input id="calc-cut" type="number" min="0" max="50" step="0.5"></div>
+            </div>
+          <div class="field">
+            <label>Deposit per unit (2-hour listing)</label>
+            <div class="money-in" id="calc-deposit">
+              <input type="number" min="0" step="1" data-part="g" aria-label="Deposit per unit (2-hour listing) gold"><span class="g">g</span>
+              <input type="number" min="0" max="99" step="1" data-part="s" aria-label="Deposit per unit (2-hour listing) silver"><span class="s">s</span>
+              <input type="number" min="0" max="99" step="1" data-part="c" aria-label="Deposit per unit (2-hour listing) copper"><span class="c">c</span>
+            </div>
+            <div class="muted small" id="calc-deposit-hint"></div>
+          </div>
+            <div class="field-row">
+              <div class="field"><label for="calc-fails">Expired listings per unit before it sells</label><input id="calc-fails" type="number" min="0" max="10" step="0.05" value="0.25"></div>
+              <div class="field"><label for="calc-margin">Minimum margin %</label><input id="calc-margin" type="number" min="0" max="200" step="1"></div>
+            </div>
+            <div class="muted small" id="calc-fails-hint">From the item's sale rate when you pick one: 0.25 means about one expired listing for every four sold.</div>
+          </div>
+          <div class="card calc-results" id="calc-results"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-health" hidden>
+      <div class="content wide">
+        <h1>Data health</h1>
+        <div id="health"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/vendor/lightweight-charts.js"></script>
+  <script src="/app.js"></script>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>
