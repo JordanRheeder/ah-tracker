@@ -26,7 +26,7 @@ It has two parts:
 ### 1. Get the app running
 
 ```bash
-git clone <this repo> ah-tracker
+git clone https://github.com/JordanRheeder/ah-tracker.git
 cd ah-tracker
 pnpm install
 pnpm run setup
