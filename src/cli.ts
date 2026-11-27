@@ -1,5 +1,5 @@
-import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { hasBlizzardCredentials, loadConfig } from "./config.ts";
 import { minMargin, openDb, safeOnly } from "./db/db.ts";
@@ -12,6 +12,7 @@ import { findTsmFiles } from "./ingest/tsmLedger.ts";
 import { auctionatorImport, buildLists, writeListsFile } from "./stats/lists.ts";
 import { HOUSES, houseByKey } from "./config.ts";
 import { installAddon } from "./setup.ts";
+import { exportMarketData, importMarketData } from "./marketData.ts";
 
 const config = loadConfig();
 const dbPath = join(config.dataDir, "ah-tracker.sqlite");
@@ -144,6 +145,27 @@ const commands: Record<string, () => Promise<void> | void> = {
   "auctionator-import"() {
     const db = openDb(dbPath);
     console.log(auctionatorImport(buildLists(db)));
+    db.close();
+  },
+
+  /** Shareable scans and public prices, no purchases or ledger: `export-market-data [file.sqlite.gz]`. */
+  async "export-market-data"() {
+    openDb(dbPath).close(); // make sure the schema is current before copying from it
+    const out = process.argv[3] ?? join("dist", `ah-tracker-market-${new Date().toISOString().slice(0, 10)}.sqlite.gz`);
+    mkdirSync(dirname(resolve(out)), { recursive: true });
+    const counts = await exportMarketData(dbPath, out);
+    console.log(`wrote ${out} (${(statSync(out).size / 1e6).toFixed(1)} MB)`);
+    for (const [t, n] of Object.entries(counts)) console.log(`  ${t}: ${n}`);
+  },
+
+  /** Merges someone's exported market data into your database: `import-market-data <file.sqlite.gz>`. */
+  async "import-market-data"() {
+    const file = process.argv[3];
+    if (!file) throw new Error("usage: import-market-data <file.sqlite.gz>");
+    const db = openDb(dbPath);
+    const counts = await importMarketData(db, file);
+    for (const [t, n] of Object.entries(counts)) console.log(`  ${t}: ${n} new`);
+    log(`imported; recomputing statistics: ${JSON.stringify(refreshStats(db).houses)}`);
     db.close();
   },
 

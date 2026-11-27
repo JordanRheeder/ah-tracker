@@ -150,12 +150,36 @@ dashboard; on Linux they also show as desktop notifications.
 | `node src/cli.ts export-tsm [house] [kind\|all] [n]` | TSM group import string for the top opportunities |
 | `node src/cli.ts tsm-groups` | Write the AH Tracker groups and operation into TSM (close WoW first) |
 | `node src/cli.ts backfill` | Undermine Exchange history backfill, until done or rate-limited |
+| `node src/cli.ts export-market-data [file]` | Shareable market data (scans + public prices, no purchases or ledger) as `.sqlite.gz` |
+| `node src/cli.ts import-market-data <file>` | Merge someone's exported market data into your database |
 | `node src/cli.ts model` | Train and test the forecasting model |
 | `node src/cli.ts houses` / `verify-buyout` | Blizzard API checks (need the Blizzard keys) |
 | `pnpm test` / `pnpm typecheck` | Unit tests and type check |
 
 Prices are in copper. `price_20` is the average unit cost of buying the cheapest 20 units, and it
 is the price every signal uses.
+
+## Shared market data
+
+To start with history instead of an empty database, download the latest
+`ah-tracker-market-<date>.sqlite.gz` from
+[Releases](https://github.com/JordanRheeder/ah-tracker/releases) and run:
+
+```bash
+node src/cli.ts import-market-data ah-tracker-market-<date>.sqlite.gz
+```
+
+Rows you already have are kept, and importing the same file twice adds nothing. The file holds:
+
+- AH scans for EU PvP Alliance and Neutral: Auctionator scans and Undermine Exchange snapshots
+- TSM realm and region prices
+- Reference prices from the other Forever PvP markets
+- Item names
+
+It holds **no** purchases, TSM ledger or accounting data (buys, sales, gold, money, holdings),
+characters, inventory, alerts, settings or local file paths. `export-market-data` copies only the
+tables listed in `src/marketData.ts`, so anything else stays private by default. It also refuses to
+write a file if any other table has rows.
 
 ## Your data stays local
 

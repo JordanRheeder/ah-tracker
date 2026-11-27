@@ -245,7 +245,7 @@ CREATE TABLE IF NOT EXISTS tsm_money (
 
 -- Gold on hand per character, from TSM: the latest exact amount and its gold log (rounded to the gold)
 CREATE TABLE IF NOT EXISTS tsm_character (
-  character  TEXT    PRIMARY KEY,              -- "Testchar"
+  character  TEXT    PRIMARY KEY,              -- character name
   faction    TEXT,
   money      INTEGER NOT NULL,                 -- copper
   updated_at INTEGER NOT NULL
