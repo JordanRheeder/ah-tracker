@@ -1,9 +1,10 @@
 // Local dashboard server: read-only JSON API plus the static dashboard in web/, on 127.0.0.1 only.
-import { createServer, type RequestListener, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type RequestListener, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { HOUSES, houseByKey, loadConfig } from "../config.ts";
+import { ENV_FILE, HOUSES, houseByKey, loadConfig, reloadEnv } from "../config.ts";
+import { checkWowDir, installAddon, listDirs, readEnvFile, saveEnv, SECRET_FIELDS, SETUP_FIELDS, wowDirCandidates, type SetupField } from "../setup.ts";
 import { CROSS_DIRECTION_KEY, crossDirection, getSetting, goodsCode, LIST_GOODS_KEY, listGoods, SNIPE_FRACTION_KEY, snipeFraction, minMargin, MIN_MARGIN_FLOOR, MIN_MARGIN_KEY, openDb, safeOnly, SAFE_ONLY_KEY, setSetting } from "../db/db.ts";
 import { RANGES, toCandles, toHeatMap, type RangeKey } from "./candles.ts";
 import { browseItems, categories, health, inventoryValuation, itemDetail, itemSeries, conversionShuffles, essenceConversions, itemStats, modelForecasts, modelScoreboard, shuffles, listAnomalies, listedQuantities, listForecasts, materials, listOpportunities, rightNow, searchItems, topMovers, tsmSeries } from "./queries.ts";
@@ -42,6 +43,39 @@ function json(res: ServerResponse, status: number, body: unknown) {
 
 let syncing = false;
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+/**
+ * Setup endpoints change .env and list folder names, so they only answer the dashboard itself: the Host
+ * must be local (blocks DNS rebinding), any Origin must be this dashboard, and POSTs must be JSON (a
+ * cross-site JSON POST needs a CORS preflight, which this server never grants).
+ */
+function localOnly(req: IncomingMessage): string | null {
+  const host = (req.headers.host ?? "").replace(/:\d+$/, "");
+  if (!LOCAL_HOSTS.has(host)) return "setup is only available at http://localhost";
+  const origin = req.headers.origin;
+  if (origin) {
+    try { if (!LOCAL_HOSTS.has(new URL(origin).hostname.replace(/^::1$/, "[::1]"))) return "cross-site request refused"; } catch { return "bad origin"; }
+  }
+  if (req.method === "POST" && !(req.headers["content-type"] ?? "").startsWith("application/json")) return "expected JSON";
+  return null;
+}
+
+const readBody = (req: IncomingMessage) => new Promise<string>((resolve) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => resolve(b)); });
+
+function setupState() {
+  const env = readEnvFile();
+  const wowDir = config.auctionator.wowForeverDir;
+  return {
+    platform: process.platform,
+    envFile: ENV_FILE,
+    wowDir,
+    check: checkWowDir(wowDir),
+    candidates: wowDir ? [] : wowDirCandidates(),
+    // Whether each key is set; the values never leave the server.
+    keys: Object.fromEntries(SETUP_FIELDS.filter((f) => SECRET_FIELDS.has(f)).map((f) => [f, Boolean(env[f])])),
+  };
+}
+
 const handler: RequestListener = async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -53,6 +87,35 @@ const handler: RequestListener = async (req, res) => {
       const body = await readFile(join(root, file));
       res.writeHead(200, { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream" });
       return res.end(body);
+    }
+
+    if (path.startsWith("/api/setup")) {
+      const refused = localOnly(req);
+      if (refused) return json(res, 403, { error: refused });
+      if (path === "/api/setup/dirs") return json(res, 200, listDirs(url.searchParams.get("path")));
+      if (path === "/api/setup/check") return json(res, 200, checkWowDir(url.searchParams.get("path") ?? ""));
+      if (path === "/api/setup/install-addon" && req.method === "POST") {
+        const dest = installAddon(config.auctionator.wowForeverDir);
+        const lists = writeListsFile(iconDb, config.auctionator.wowForeverDir);
+        return json(res, 200, { dest, lists: lists?.items ?? 0, setup: setupState() });
+      }
+      if (path === "/api/setup" && req.method === "POST") {
+        // Only the fields sent are changed; "" clears a key.
+        const body = JSON.parse((await readBody(req)) || "{}") as Record<string, unknown>;
+        const updates: Partial<Record<SetupField, string>> = {};
+        for (const f of SETUP_FIELDS) if (typeof body[f] === "string") updates[f] = body[f] as string;
+        if (updates.WOW_FOREVER_DIR) {
+          const c = checkWowDir(updates.WOW_FOREVER_DIR);
+          if (!c.looksRight) return json(res, 400, { error: c.hint ?? "not a WoW _forever_ folder" });
+          updates.WOW_FOREVER_DIR = c.path;
+        }
+        if (!Object.keys(updates).length) return json(res, 400, { error: "nothing to save" });
+        saveEnv(updates);
+        reloadEnv(config); // the collector service picks the change up on its next 20-second check
+        return json(res, 200, setupState());
+      }
+      if (path === "/api/setup") return json(res, 200, setupState());
+      return json(res, 404, { error: "not found" });
     }
 
     const house = houseByKey(url.searchParams.get("house")) ?? HOUSES[0]!;

@@ -1,5 +1,6 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseEnv } from "node:util";
 
 export interface House {
   /** Short key used in the dashboard and addon: alliance | neutral | horde. */
@@ -67,6 +68,11 @@ export interface Config {
 }
 
 const root = resolve(import.meta.dirname, "..");
+/** The git-ignored settings file; the dashboard's Setup page edits it too. */
+export const ENV_FILE = resolve(root, ".env");
+export const ENV_EXAMPLE = resolve(root, ".env.example");
+/** Modification time of the .env version last read into the config. */
+let envMtime = 0;
 
 function num(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -82,8 +88,10 @@ function str(name: string, fallback: string): string {
 }
 
 export function loadConfig(): Config {
-  const envFile = resolve(root, ".env");
-  if (existsSync(envFile)) process.loadEnvFile(envFile);
+  if (existsSync(ENV_FILE)) {
+    process.loadEnvFile(ENV_FILE);
+    envMtime = statSync(ENV_FILE).mtimeMs;
+  }
 
   return {
     blizzard: {
@@ -118,6 +126,23 @@ export function loadConfig(): Config {
     rawRetentionDays: num("RAW_RETENTION_DAYS", 30),
     dataDir: resolve(root, str("DATA_DIR", "./data")),
   };
+}
+
+/**
+ * Picks up settings saved from the dashboard's Setup page without a restart: when .env has changed,
+ * re-reads the WoW folder and the API keys into `config` (other settings still need a restart).
+ */
+export function reloadEnv(config: Config): boolean {
+  let mtime = 0;
+  try { mtime = statSync(ENV_FILE).mtimeMs; } catch { return false; }
+  if (mtime === envMtime) return false;
+  envMtime = mtime;
+  const env = parseEnv(readFileSync(ENV_FILE, "utf8"));
+  config.auctionator.wowForeverDir = env.WOW_FOREVER_DIR ?? "";
+  config.undermine.apiKey = env.UNDERMINE_API_KEY ?? "";
+  config.blizzard.clientId = env.BLIZZARD_CLIENT_ID ?? "";
+  config.blizzard.clientSecret = env.BLIZZARD_CLIENT_SECRET ?? "";
+  return true;
 }
 
 export function hasBlizzardCredentials(config: Config): boolean {

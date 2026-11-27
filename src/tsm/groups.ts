@@ -342,8 +342,14 @@ export function updateTsmText(text: string, wanted: Map<string, string>, margin:
   return { text: out, plan: { items: wanted.size, groups: wantedGroups.size, added, removed: removed + groupsRemoved, kept, operationCreated } };
 }
 
-/** Whether WoW is running (on the host; works from the systemd service and through host-spawn). */
+/** Whether WoW is running (on Windows via tasklist; on Linux/Wine via pgrep, also through host-spawn). */
 export function wowRunning(): boolean {
+  if (process.platform === "win32") {
+    try {
+      const out = execFileSync("tasklist", ["/FI", "IMAGENAME eq Wow.exe", "/NH"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      return /^Wow\.exe\s/im.test(out);
+    } catch { return false; }
+  }
   for (const cmd of [["pgrep", "-fa", "Wow.exe"], ["host-spawn", "pgrep", "-fa", "Wow.exe"]]) {
     try {
       const out = execFileSync(cmd[0]!, cmd.slice(1), { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });

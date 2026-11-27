@@ -814,7 +814,7 @@ function showToast(n) {
   const el = document.createElement("div");
   el.className = "toast";
   el.innerHTML = `<b>${esc(n.title)}</b><div>${esc(n.body).replace(/\n/g, "<br>")}</div>`;
-  el.addEventListener("click", () => { el.remove(); location.hash = n.itemId ? `#/item/${n.itemId}` : "#/notifications"; });
+  el.addEventListener("click", () => { el.remove(); location.hash = n.href ?? (n.itemId ? `#/item/${n.itemId}` : "#/notifications"); });
   $("#toasts").appendChild(el);
   setTimeout(() => el.remove(), 20000);
 }
@@ -1769,11 +1769,131 @@ $("#craft-q").addEventListener("input", (e) => { cf.q = e.target.value; saveCf()
 $("#craft-reset").addEventListener("click", () => { Object.assign(cf, { prof: "", pays: false, transmute: false, minPrice: 0, minSold: 0, priced: true, q: "" }); saveCf(); renderCrafting(); });
 $("#craft-rows").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) location.hash = `#/item/${tr.dataset.id}`; });
 
+// ---------- setup: WoW folder, addon, API keys (saved to .env by the server) ----------
+const KEY_INFO = [
+  { field: "UNDERMINE_API_KEY", label: "Undermine Exchange API key", url: "https://undermine.exchange/api.html", does: "Hourly prices for every Forever house, plus history backfill." },
+  { field: "BLIZZARD_CLIENT_ID", label: "Blizzard client ID", url: "https://develop.battle.net/access/clients", does: "Live auction snapshots from the Blizzard API (needs the ID and the secret)." },
+  { field: "BLIZZARD_CLIENT_SECRET", label: "Blizzard client secret", url: "https://develop.battle.net/access/clients", does: "" },
+];
+let setup = null;
+let explorerPath = null;
+
+async function setupPost(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function dirStatus(c) {
+  if (!c.path) return `<span class="bad">Not set.</span>`;
+  if (!c.looksRight) return `<span class="bad">${esc(c.hint)}</span>`;
+  const accounts = c.accounts.length ? `${c.accounts.length} WoW account${c.accounts.length > 1 ? "s" : ""} found` : esc(c.hint);
+  const auc = c.auctionatorInstalled ? "" : ` · <span class="bad">Auctionator not installed</span>`;
+  return `<span class="ok">✓ WoW folder</span> · ${accounts}${auc}`;
+}
+
+function renderSetup() {
+  const s = setup;
+  $("#setup-banner").hidden = Boolean(s.check.looksRight);
+  $("#setup-env").textContent = s.envFile;
+  if (document.activeElement !== $("#setup-dir")) $("#setup-dir").value = s.wowDir;
+  $("#setup-dir-status").innerHTML = s.wowDir ? `Saved: ${dirStatus(s.check)}` : `<span class="bad">No folder saved yet.</span>`;
+  $("#setup-found").innerHTML = s.candidates.length
+    ? `<p>Found on this computer:</p><ul class="found">${s.candidates.map((p) => `<li><code>${esc(p)}</code> <button class="btn small" data-use="${esc(p)}" type="button">Use this</button></li>`).join("")}</ul>`
+    : "";
+  $("#setup-install").disabled = !s.check.looksRight;
+  $("#setup-install").textContent = s.check.addonInstalled ? "Update addon" : "Install addon";
+  $("#setup-addon-status").innerHTML = !s.check.looksRight ? `<span class="muted">Save the WoW folder first.</span>`
+    : s.check.addonInstalled ? `<span class="ok">✓ Installed</span>` : `<span class="muted">Not installed yet.</span>`;
+  $("#setup-keys").innerHTML = KEY_INFO.map((k) => `
+    <div class="key-row">
+      <label for="key-${k.field}"><b>${esc(k.label)}</b> ${s.keys[k.field] ? `<span class="ok">✓ saved</span>` : `<span class="muted">not set</span>`}</label>
+      <div class="muted small">${esc(k.does)} ${k.does ? `Get one at <a href="${esc(k.url)}" target="_blank" rel="noopener">${esc(new URL(k.url).host)}</a>.` : ""}</div>
+      <div class="setup-row">
+        <input id="key-${k.field}" type="password" autocomplete="off" spellcheck="false" placeholder="${s.keys[k.field] ? "Saved. Type to replace" : "Paste key"}">
+        <button class="btn primary" data-key-save="${k.field}" type="button">Save</button>
+        ${s.keys[k.field] ? `<button class="btn" data-key-clear="${k.field}" type="button">Remove</button>` : ""}
+      </div>
+    </div>`).join("");
+}
+
+async function showSetup() {
+  setup = await (await fetch("/api/setup")).json();
+  renderSetup();
+}
+
+async function saveDir(path) {
+  try {
+    setup = await setupPost("/api/setup", { WOW_FOREVER_DIR: path });
+    renderSetup();
+    $("#setup-explorer").hidden = true;
+    showToast({ href: "#/setup", title: "WoW folder saved", body: setup.check.addonInstalled ? "Scans will be imported within a minute." : "Next: install the addon." });
+  } catch (err) {
+    $("#setup-dir-status").innerHTML = `<span class="bad">${esc(err.message)}</span>`;
+  }
+}
+
+async function openExplorer(path) {
+  const r = await (await fetch(`/api/setup/dirs?path=${encodeURIComponent(path ?? "")}`)).json();
+  explorerPath = r.path;
+  $("#setup-explorer").hidden = false;
+  $("#explorer-places").innerHTML = r.places.map((p) => `<button class="btn small" data-go="${esc(p.path)}" type="button">${esc(p.label)}</button>`).join("");
+  $("#explorer-path").textContent = r.path;
+  $("#explorer-up").disabled = !r.parent;
+  $("#explorer-up").dataset.go = r.parent ?? "";
+  const sep = setup?.platform === "win32" ? "\\" : "/";
+  const join = (a, b) => (a.endsWith(sep) ? a + b : a + sep + b);
+  $("#explorer-list").innerHTML = r.error ? `<li class="bad">${esc(r.error)}</li>`
+    : r.dirs.length ? r.dirs.map((d) => `<li data-go="${esc(join(r.path, d))}"${d === "_forever_" ? ' class="hl"' : ""}>📁 ${esc(d)}</li>`).join("")
+    : `<li class="muted">No folders here</li>`;
+  const c = await (await fetch(`/api/setup/check?path=${encodeURIComponent(r.path)}`)).json();
+  $("#explorer-check").innerHTML = c.looksRight ? `<span class="ok">✓ This is a WoW folder</span>` : esc(c.hint ?? "");
+  $("#explorer-pick").disabled = !c.looksRight;
+}
+
+$("#setup-browse").addEventListener("click", () => openExplorer($("#setup-dir").value || setup?.wowDir || ""));
+$("#setup-dir-save").addEventListener("click", () => saveDir($("#setup-dir").value));
+$("#setup-dir").addEventListener("keydown", (e) => { if (e.key === "Enter") saveDir(e.target.value); });
+$("#explorer-pick").addEventListener("click", () => saveDir(explorerPath));
+$("#setup-explorer").addEventListener("click", (e) => {
+  const el = e.target.closest("[data-go]");
+  if (el && el.dataset.go) openExplorer(el.dataset.go);
+});
+$("#setup-found").addEventListener("click", (e) => { const b = e.target.closest("[data-use]"); if (b) saveDir(b.dataset.use); });
+$("#setup-install").addEventListener("click", async () => {
+  $("#setup-addon-status").textContent = "Installing…";
+  try {
+    const r = await setupPost("/api/setup/install-addon");
+    setup = r.setup;
+    renderSetup();
+    $("#setup-addon-status").innerHTML = `<span class="ok">✓ Installed to</span> <code>${esc(r.dest)}</code>. Type <code>/reload</code> in game.`;
+  } catch (err) {
+    $("#setup-addon-status").innerHTML = `<span class="bad">${esc(err.message)}</span>`;
+  }
+});
+$("#setup-keys").addEventListener("click", async (e) => {
+  const save = e.target.closest("[data-key-save]"), clear = e.target.closest("[data-key-clear]");
+  const field = save?.dataset.keySave ?? clear?.dataset.keyClear;
+  if (!field) return;
+  const value = save ? $(`#key-${field}`).value.trim() : "";
+  if (save && !value) return $(`#key-${field}`).focus();
+  try {
+    setup = await setupPost("/api/setup", { [field]: value });
+    renderSetup();
+    showToast({ href: "#/setup", title: save ? "Key saved" : "Key removed", body: "The collector picks it up within a minute." });
+  } catch (err) {
+    showToast({ href: "#/setup", title: "Could not save", body: err.message });
+  }
+});
+// Show the "finish setup" banner on any page until the WoW folder is set.
+fetch("/api/setup").then((r) => r.json()).then((s) => { setup = s; $("#setup-banner").hidden = Boolean(s.check.looksRight); }).catch(() => {});
+
 // ---------- routing ----------
 async function route() {
   const hash = location.hash || "#/overview";
-  const view = ["notifications", "watch", "crafting", "overview", "flips", "shuffles", "forecasts", "materials", "health", "browse", "opportunities", "anomalies", "calc", "inventory"].find((v) => hash.startsWith(`#/${v}`)) ?? "items";
-  for (const v of ["notifications", "watch", "crafting", "overview", "flips", "shuffles", "forecasts", "materials", "items", "browse", "health", "opportunities", "anomalies", "calc", "inventory"]) $(`#view-${v}`).hidden = view !== v;
+  const view = ["notifications", "watch", "crafting", "overview", "flips", "shuffles", "forecasts", "materials", "health", "browse", "opportunities", "anomalies", "calc", "inventory", "setup"].find((v) => hash.startsWith(`#/${v}`)) ?? "items";
+  for (const v of ["notifications", "watch", "crafting", "overview", "flips", "shuffles", "forecasts", "materials", "items", "browse", "health", "opportunities", "anomalies", "calc", "inventory", "setup"]) $(`#view-${v}`).hidden = view !== v;
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.nav === view));
   try {
     if (view === "notifications") { setTitle("Notifications"); return await showNotifications(); }
@@ -1785,6 +1905,7 @@ async function route() {
     if (view === "shuffles") { setTitle("Enchanting shuffles"); return await showShuffles(); }
     if (view === "materials") { setTitle("Materials", houseName()); return await showMaterials(); }
     if (view === "health") { setTitle("Data health"); return await showHealth(); }
+    if (view === "setup") { setTitle("Setup"); return await showSetup(); }
     if (view === "opportunities") { setTitle(`Opportunities · ${TAB_LABEL[oppKind]}`, oppKind === "cross-house" ? "" : houseName()); return await showOpportunities(); }
     if (view === "anomalies") { setTitle("Anomalies", houseName()); return await showAnomalies(); }
     if (view === "calc") { setTitle("Profit calculator"); return await showCalc(); }

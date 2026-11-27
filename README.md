@@ -15,56 +15,78 @@ It has two parts:
 
 ## What you need
 
+- Windows, macOS or Linux. On Linux, WoW runs through Wine, Lutris, Bottles or Faugus.
 - WoW: Forever with **Auctionator** installed (the addon depends on it). TSM is optional; with it
   installed, the app reads your TSM accounting data so it can track inventory and open purchases.
-- Node 24 or newer and pnpm
+- [Node.js](https://nodejs.org/) 24 or newer and [pnpm](https://pnpm.io/installation)
 - Python 3.12 or newer (optional, only for the forecasting model)
 
 ## Setup
 
+### 1. Get the app running
+
 ```bash
-git clone <this repo> ah-tracker && cd ah-tracker
+git clone <this repo> ah-tracker
+cd ah-tracker
 pnpm install
-pnpm run setup        # creates .env from .env.example and turns on the secret-guard git hook
+pnpm run setup
+pnpm serve
 ```
 
-Then open `.env` and fill in:
+`pnpm run setup` creates `.env` from `.env.example` and turns on the secret-guard git hook.
+`pnpm serve` runs the collector and the dashboard together; leave that window open.
 
-| Setting | Required | Where to get it |
-| --- | --- | --- |
-| `WOW_FOREVER_DIR` | **yes** | Your WoW `_forever_` folder, the one that contains `Interface/` and `WTF/` |
-| `UNDERMINE_API_KEY` | no | https://undermine.exchange/api.html. Adds hourly prices for every Forever house and backfills history |
-| `BLIZZARD_CLIENT_ID` / `BLIZZARD_CLIENT_SECRET` | no | Create a client at https://develop.battle.net/access/clients |
+**On Windows**, you can instead double-click `deploy\windows\AH Tracker.cmd`. It installs
+dependencies the first time, starts AH Tracker in a minimized window and opens the dashboard. To
+start AH Tracker whenever you log in, press `Win+R`, type `shell:startup`, and put a shortcut to
+that file in the folder that opens.
 
-TSM public price data needs no key. A source whose key is blank is switched off, and the app
-works on Auctionator scans plus TSM alone. Everything else in `.env.example` has a working
-default (house, region, polling intervals, AH cut, dashboard port).
+### 2. Finish setup in the dashboard
+
+Open **http://localhost:8787/#/setup**. Until the WoW folder is set, every page shows a banner
+linking to the Setup page. It has three steps:
+
+1. **WoW: Forever folder.** Pick the `_forever_` folder inside World of Warcraft, either from the
+   suggestions found on your computer or with **Browse…**, which opens a folder explorer (drives on
+   Windows, your home folder everywhere). The usual Windows location is
+   `C:\Program Files (x86)\World of Warcraft\_forever_`. The page tells you if you picked the outer
+   World of Warcraft folder by mistake, and whether Auctionator is installed.
+2. **AHTracker addon.** Click **Install addon** to copy it into `Interface\AddOns\AHTracker`.
+   Then `/reload` in game, or restart WoW, and make sure **AH Tracker** and **Auctionator** are
+   both enabled on the character select AddOns screen.
+3. **API keys (optional).** Paste each key and click **Save**:
+
+   | Key | Get it at | Adds |
+   | --- | --- | --- |
+   | Undermine Exchange API key | https://undermine.exchange/api.html | Hourly prices for every Forever house, plus history backfill |
+   | Blizzard client ID and secret | https://develop.battle.net/access/clients (create a client) | Live auction snapshots from the Blizzard API |
+
+   TSM public price data needs no key. Without keys, AH Tracker runs on your Auctionator scans and
+   TSM. Saved keys are never shown again (the page only says "saved"), and **Remove** clears one.
+
+Everything is saved to `.env` in the app folder, and the running collector picks up changes within
+a minute, without a restart. You can also edit `.env` by hand. It documents every other setting
+(house, region, polling intervals, AH cut, dashboard port); those need a restart.
 
 To track a different realm or faction, change `TSM_REALM` and `AUCTION_HOUSE_ID` in `.env`, and
 the `HOUSES` list in `src/config.ts`. `node src/cli.ts houses` lists the Forever house ids (this
 needs the Blizzard keys).
 
+### Installing the addon without the dashboard
+
+- `pnpm install-addon` does the same as the Setup page's button.
+- `pnpm package-addon` builds `dist/AHTracker-<version>.zip`. Unzip it into
+  `_forever_/Interface/AddOns/`, so you end up with `Interface/AddOns/AHTracker/AHTracker.toc`.
+
 ### Forecasting model (optional)
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
 .venv/bin/pip install -r ml/requirements.txt
 ```
 
-The service retrains every 6 hours if `.venv` exists. To run it by hand: `node src/cli.ts model`.
-
-## Installing the addon
-
-Pick one:
-
-- **From the app:** `pnpm install-addon` copies `addon/AHTracker` into
-  `$WOW_FOREVER_DIR/Interface/AddOns/AHTracker` and writes fresh shopping lists. It keeps an
-  existing `Lists.lua`.
-- **By hand:** `pnpm package-addon` builds `dist/AHTracker-<version>.zip`. Unzip it into
-  `_forever_/Interface/AddOns/`, so you end up with `Interface/AddOns/AHTracker/AHTracker.toc`.
-
-Restart WoW or `/reload`, and make sure **AH Tracker** and **Auctionator** are both enabled on
-the character select AddOns screen.
+On Windows the second line is `.venv\Scripts\pip install -r ml\requirements.txt`. The collector
+retrains every 6 hours if `.venv` exists. To run it by hand: `node src/cli.ts model`.
 
 ## Using it
 
@@ -86,7 +108,11 @@ the character select AddOns screen.
 
 ### The app
 
-Run it in the background (Linux, systemd user services):
+`pnpm serve` (or `AH Tracker.cmd` on Windows) keeps it running while the window is open. You can
+also run the two parts separately: `pnpm start` for the collector and `pnpm dashboard` for the
+dashboard.
+
+**Linux: run it in the background with systemd.**
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -98,21 +124,20 @@ systemctl --user enable --now ah-tracker ah-dashboard
 Both unit files assume the repo is at `~/Projects/ah-tracker` and node is at
 `~/.local/share/pnpm/bin/node`. Edit `WorkingDirectory` and `ExecStart` if yours differ. Logs:
 `journalctl --user -u ah-tracker -f`. To keep the service running after logout, run
-`loginctl enable-linger $USER`.
-
-Without systemd, run `pnpm start` (collector) and `pnpm dashboard` in two terminals.
-`deploy/ah-tracker-open.sh` is a desktop-shortcut script: it starts both services, imports new
-data and opens the dashboard.
+`loginctl enable-linger $USER`. `deploy/ah-tracker-open.sh` is a desktop-shortcut script: it
+starts both services, imports new data and opens the dashboard.
 
 The dashboard is at **http://localhost:8787/** and listens on loopback only. It has these pages:
 Overview, item charts (candles, volume, heat map by hour), Flips, What to trade, Enchanting
-shuffles, Crafting, Materials, Watchlist, Forecasts, Anomalies, Your inventory, Profit calculator
-and Data health. The **Sync** button pulls everything now.
+shuffles, Crafting, Materials, Watchlist, Forecasts, Anomalies, Your inventory, Profit calculator,
+Setup and Data health. The **Sync** button pulls everything now. Alerts appear on the
+dashboard; on Linux they also show as desktop notifications.
 
 ### Commands
 
 | Command | Does |
 | --- | --- |
+| `pnpm serve` | Collector and dashboard together (Ctrl+C stops both) |
 | `node src/cli.ts status` | Last fetch per source, snapshot count, gaps over 2 h |
 | `node src/cli.ts poll-once` | One fetch of every source, then exit |
 | `node src/cli.ts sync` | Pull everything now and recompute (the dashboard's Sync button) |
@@ -136,7 +161,10 @@ is the price every signal uses.
 Your data lives in `data/ah-tracker.sqlite` and is never committed. That includes scans, prices
 and your TSM accounting (buys, sales, gold, inventory). `.gitignore` excludes `.env`, `data/`,
 `reports/`, `*.sqlite`, WoW `WTF/` and `SavedVariables/` folders, and TSM ledger or accounting
-exports. The `.githooks/pre-commit` hook (turned on by `pnpm run setup`) refuses any commit
+exports. API keys entered on the Setup page go into `.env` and never leave your computer: the
+dashboard only listens on this computer, its setup endpoints refuse requests from other websites,
+and it never sends saved keys back to the browser. The `.githooks/pre-commit` hook (turned on by
+`pnpm run setup`) refuses any commit
 that contains:
 
 - a `.env` file, or a line that assigns a value to a `*KEY`, `*SECRET`, `*TOKEN`, `*PASSWORD` or

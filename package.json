@@ -11,14 +11,15 @@
     "poll": "node src/cli.ts poll-once",
     "start": "node src/cli.ts run",
     "status": "node src/cli.ts status",
-    "test": "node --test 'test/**/*.test.ts'",
+    "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "install-addon": "node src/cli.ts install-addon",
     "import-scans": "node src/cli.ts import-scans",
     "dashboard": "node src/api/server.ts",
     "lists": "node src/cli.ts lists",
-    "setup": "test -f .env || cp .env.example .env; git config core.hooksPath .githooks; echo \"Now edit .env (at least WOW_FOREVER_DIR)\"",
-    "package-addon": "bash scripts/package-addon.sh"
+    "setup": "node scripts/setup.ts",
+    "package-addon": "node scripts/package-addon.ts",
+    "serve": "node scripts/serve.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

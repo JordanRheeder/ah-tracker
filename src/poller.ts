@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
-import { HOUSES, hasBlizzardCredentials, houseByKey, type Config } from "./config.ts";
+import { HOUSES, hasBlizzardCredentials, houseByKey, reloadEnv, type Config } from "./config.ts";
 import { getSetting, logFetch, setSetting, type Db } from "./db/db.ts";
 import { fetchHouse, lastStoredSnapshot, storeSnapshot } from "./ingest/blizzard.ts";
 import { fetchTsm, storeTsm, type TsmKind } from "./ingest/tsm.ts";
@@ -241,7 +241,7 @@ export function pruneRaw(db: Db, config: Config): string {
  * markets, tests itself on EU Alliance and writes ml_forecast / ml_eval. Skipped if the environment is missing.
  */
 export function runForecastModel(db: Db, config: Config): Promise<string> {
-  const python = join(process.cwd(), ".venv", "bin", "python");
+  const python = process.platform === "win32" ? join(process.cwd(), ".venv", "Scripts", "python.exe") : join(process.cwd(), ".venv", "bin", "python");
   const script = join(process.cwd(), "ml", "forecast.py");
   const dbPath = process.env.AH_DB ?? join(config.dataDir, "ah-tracker.sqlite");
   if (!existsSync(python) || !existsSync(script)) return Promise.resolve("forecast model: skipped, no .venv (see ml/requirements.txt)");
@@ -280,6 +280,7 @@ export function startScheduler(db: Db, config: Config, log: (msg: string) => voi
   // database writes of a running Undermine poll or backfill.
   let lastQuiet = 0;
   const auctionator = () => {
+    if (reloadEnv(config)) log(`settings: .env changed, now using WoW folder "${config.auctionator.wowForeverDir || "(not set)"}", Undermine ${config.undermine.apiKey ? "on" : "off"}, Blizzard API ${hasBlizzardCredentials(config) ? "on" : "off"}`);
     try {
       const scans = pollAuctionator(db, config);
       const ledger = pollLedger(db, config);
@@ -325,7 +326,8 @@ export function startScheduler(db: Db, config: Config, log: (msg: string) => voi
   setTimeout(auctionator, 1_000);
   setTimeout(undermine, 5_000);
   setTimeout(backfill, 90_000);
-  if (hasBlizzardCredentials(config)) setTimeout(blizzard, 10_000);
+  // The Blizzard job always runs and skips itself until credentials are set (they can be added from the dashboard).
+  setTimeout(blizzard, 10_000);
   setTimeout(tsm, 30_000);
   setTimeout(prune, 60_000);
   setTimeout(model, 10 * 60_000);
@@ -335,7 +337,7 @@ export function startScheduler(db: Db, config: Config, log: (msg: string) => voi
     setInterval(undermine, config.pollMinutes.undermine * 60_000),
     // Backfill runs in small batches every 5 minutes; it pauses itself when the hourly budget runs low.
     setInterval(backfill, 5 * 60_000),
-    ...(hasBlizzardCredentials(config) ? [setInterval(blizzard, config.pollMinutes.blizzard * 60_000)] : []),
+    setInterval(blizzard, config.pollMinutes.blizzard * 60_000),
     setInterval(tsm, config.pollMinutes.tsm * 60_000),
     setInterval(prune, 24 * 3600_000),
     setInterval(model, 6 * 3600_000),

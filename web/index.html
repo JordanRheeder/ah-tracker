@@ -14,6 +14,7 @@
       <span id="last-update" class="muted small"></span>
     </div>
     <div id="sync-msg" class="sync-msg" role="status" hidden></div>
+    <div id="setup-banner" class="setup-banner" hidden>AH Tracker doesn't know where WoW is yet. <a href="#/setup">Finish setup</a> to start importing your scans.</div>
     <nav>
       <a href="#/overview" data-nav="overview">Overview</a>
       <a href="#/flips" data-nav="flips">Flips</a>
@@ -29,6 +30,7 @@
       <a href="#/anomalies" data-nav="anomalies">Anomalies</a>
       <a href="#/inventory" data-nav="inventory">Inventory</a>
       <a href="#/calc" data-nav="calc">Calculator</a>
+      <a href="#/setup" data-nav="setup">Setup</a>
       <a href="#/notifications" data-nav="notifications">Notifications <span id="notif-badge" class="notif-badge" hidden></span></a>
     </nav>
   </header>
@@ -629,6 +631,52 @@
             <div class="muted small" id="calc-fails-hint">From the item's sale rate when you pick one: 0.25 means about one expired listing for every four sold.</div>
           </div>
           <div class="card calc-results" id="calc-results"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-setup" hidden>
+      <div class="content wide setup">
+        <h1>Setup</h1>
+        <p class="muted">Settings are saved to <code id="setup-env"></code> on this computer. It is never committed to git, and the dashboard only listens on this computer.</p>
+
+        <div class="card">
+          <div class="card-title">1. WoW: Forever folder</div>
+          <p class="muted">Pick the <code>_forever_</code> folder inside your World of Warcraft install, the one that contains <code>Interface</code> and <code>WTF</code>. On Windows that is usually <code>C:\Program Files (x86)\World of Warcraft\_forever_</code>.</p>
+          <div id="setup-found"></div>
+          <div class="setup-row">
+            <input id="setup-dir" type="text" spellcheck="false" autocomplete="off" placeholder="Folder path">
+            <button id="setup-browse" class="btn" type="button">Browse…</button>
+            <button id="setup-dir-save" class="btn primary" type="button">Save folder</button>
+          </div>
+          <div id="setup-dir-status" class="setup-status"></div>
+          <div id="setup-explorer" class="explorer" hidden>
+            <div class="explorer-places" id="explorer-places"></div>
+            <div class="explorer-bar">
+              <button id="explorer-up" class="btn small" type="button" title="Parent folder">↑ Up</button>
+              <code id="explorer-path"></code>
+            </div>
+            <ul id="explorer-list" class="explorer-list"></ul>
+            <div class="explorer-foot">
+              <span id="explorer-check" class="muted"></span>
+              <button id="explorer-pick" class="btn primary" type="button">Use this folder</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">2. AHTracker addon</div>
+          <p class="muted">Copies the addon into <code>Interface\AddOns\AHTracker</code>. It needs <b>Auctionator</b>. Run this again after updating AH Tracker, then <code>/reload</code> in game.</p>
+          <div class="setup-row">
+            <button id="setup-install" class="btn primary" type="button">Install addon</button>
+            <span id="setup-addon-status" class="setup-status"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">3. API keys <span class="muted">optional</span></div>
+          <p class="muted">Each source switches on as soon as its key is saved. Without keys, AH Tracker uses your Auctionator scans and TSM's public prices. Saved keys are never shown again; type a new one to replace it.</p>
+          <div id="setup-keys"></div>
         </div>
       </div>
     </section>

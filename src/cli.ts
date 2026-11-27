@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { hasBlizzardCredentials, loadConfig } from "./config.ts";
@@ -11,6 +11,7 @@ import { OPERATION, writeTsmGroups } from "./tsm/groups.ts";
 import { findTsmFiles } from "./ingest/tsmLedger.ts";
 import { auctionatorImport, buildLists, writeListsFile } from "./stats/lists.ts";
 import { HOUSES, houseByKey } from "./config.ts";
+import { installAddon } from "./setup.ts";
 
 const config = loadConfig();
 const dbPath = join(config.dataDir, "ah-tracker.sqlite");
@@ -124,12 +125,7 @@ const commands: Record<string, () => Promise<void> | void> = {
 
   /** Copies addon/AHTracker into WoW's Interface/AddOns (keeping an existing Lists.lua), then writes fresh lists. */
   "install-addon"() {
-    if (!config.auctionator.wowForeverDir) throw new Error("set WOW_FOREVER_DIR in .env first");
-    const src = join(import.meta.dirname, "..", "addon", "AHTracker");
-    const dest = join(config.auctionator.wowForeverDir, "Interface", "AddOns", "AHTracker");
-    mkdirSync(dest, { recursive: true });
-    for (const f of readdirSync(src))
-      if (f !== "Lists.lua" || !existsSync(join(dest, f))) copyFileSync(join(src, f), join(dest, f));
+    const dest = installAddon(config.auctionator.wowForeverDir);
     console.log(`installed addon to ${dest}`);
     commands.lists!();
   },
